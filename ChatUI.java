@@ -34,7 +34,7 @@ import javax.swing.text.StyledDocument;
  */
 public class ChatUI extends JFrame {
 
-    private static final String DEFAULT_URL = "https://rule-based-it-support-chatbot-1.onrender.com/chat";
+    private static final String DEFAULT_URL = "https://rule-based-it-support-chatbot-1.onrender.com/";
 
     /** Suggestion chips on the start screen: {label, text sent to the bot}. Edit to match your bot. */
     private static final String[][] QUICK_BUTTONS = {
