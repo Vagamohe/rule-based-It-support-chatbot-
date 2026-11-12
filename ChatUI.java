@@ -1,13 +1,3 @@
-import javax.swing.*;
-import javax.swing.border.CompoundBorder;
-import javax.swing.border.EmptyBorder;
-import javax.swing.border.MatteBorder;
-import javax.swing.event.DocumentEvent;
-import javax.swing.event.DocumentListener;
-import javax.swing.plaf.basic.BasicScrollBarUI;
-import javax.swing.text.SimpleAttributeSet;
-import javax.swing.text.StyleConstants;
-import javax.swing.text.StyledDocument;
 import java.awt.*;
 import java.awt.event.FocusAdapter;
 import java.awt.event.FocusEvent;
@@ -24,6 +14,16 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
+import javax.swing.*;
+import javax.swing.border.CompoundBorder;
+import javax.swing.border.EmptyBorder;
+import javax.swing.border.MatteBorder;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
+import javax.swing.plaf.basic.BasicScrollBarUI;
+import javax.swing.text.SimpleAttributeSet;
+import javax.swing.text.StyleConstants;
+import javax.swing.text.StyledDocument;
 
 /**
  * Modern chat window (Java Swing) for the university IT support bot.
@@ -34,7 +34,7 @@ import java.util.concurrent.CompletionException;
  */
 public class ChatUI extends JFrame {
 
-    private static final String DEFAULT_URL = "http://127.0.0.1:8000/chat";
+    private static final String DEFAULT_URL = "https://rule-based-it-support-chatbot-1.onrender.com/chat";
 
     /** Suggestion chips on the start screen: {label, text sent to the bot}. Edit to match your bot. */
     private static final String[][] QUICK_BUTTONS = {
