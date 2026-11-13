@@ -167,7 +167,7 @@ def get_response(message, session_id):
             "Please describe it differently."
         )
 
-@app.post("/chat")
+@app.post("/")
 def chat(request: ChatRequest):
     return {
         "reply": get_response(
