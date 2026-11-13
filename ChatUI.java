@@ -3,21 +3,25 @@ import java.awt.event.FocusAdapter;
 import java.awt.event.FocusEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.awt.geom.Arc2D;
+import java.awt.geom.Area;
+import java.awt.geom.Ellipse2D;
 import java.awt.geom.Path2D;
+import java.awt.geom.Rectangle2D;
 import java.awt.geom.RoundRectangle2D;
 import java.awt.image.BufferedImage;
 import java.net.ConnectException;
 import java.net.http.HttpConnectTimeoutException;
 import java.net.http.HttpTimeoutException;
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import javax.swing.*;
-import javax.swing.border.CompoundBorder;
 import javax.swing.border.EmptyBorder;
-import javax.swing.border.MatteBorder;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import javax.swing.plaf.basic.BasicScrollBarUI;
@@ -26,54 +30,63 @@ import javax.swing.text.StyleConstants;
 import javax.swing.text.StyledDocument;
 
 /**
- * Modern chat window (Java Swing) for the university IT support bot.
+ * Chat window (Java Swing) for the university IT support bot.
  * It contains NO chatbot logic: messages are sent to the FastAPI server through ApiClient.
  *
- * Run:  java ChatUI                              (uses http://127.0.0.1:8000/chat)
+ * Run:  java ChatUI                              (uses DEFAULT_URL)
  *       java ChatUI http://192.168.1.10:8000/chat
+ *
+ * Look: a deep-lagoon side rail with the help topics, a mist-grey conversation area,
+ * and a marigold "signal" mark that stands for the bot (it is also the typing indicator).
  */
 public class ChatUI extends JFrame {
 
     private static final String DEFAULT_URL =
     "https://rule-based-it-support-chatbot-r8s4.onrender.com/";
 
-    /** Suggestion chips on the start screen: {label, text sent to the bot}. Edit to match your bot. */
+    /** Topic shortcuts in the side rail: {label, text sent to the bot}. Edit to match your bot. */
     private static final String[][] QUICK_BUTTONS = {
             {"Wifi", "wifi"}, {"Password", "password"}, {"Email", "email"}, {"Moodle", "moodle"},
             {"Portal", "portal"}, {"Printer", "printer"}, {"Software", "software"}, {"Menu", "menu"}
     };
 
-    // ---------- Colors (warm, minimal palette) ----------
-    static final Color BG = new Color(0xFAF9F5);
-    static final Color TEXT = new Color(0x1F1E1D);
-    static final Color MUTED = new Color(0x8A877D);
-    static final Color BORDER = new Color(0xE3E0D6);
-    static final Color ACCENT = new Color(0xC96442);
-    static final Color ACCENT_HOVER = new Color(0xB5573A);
-    static final Color USER_BG = new Color(0xEFECE3);
-    static final Color CHIP_BG = Color.WHITE;
-    static final Color CHIP_HOVER = new Color(0xF2F0E8);
-    static final Color DISABLED_FILL = new Color(0xDDD9CC);
-    static final Color DOT_IDLE = new Color(0xCFCBBE);
-    static final Color ERROR_BG = new Color(0xFBEAEA);
+    // ---------- Colors ----------
+    static final Color BG = new Color(0xF1F4F2);            // mist
+    static final Color SURFACE = Color.WHITE;
+    static final Color TEXT = new Color(0x14292B);
+    static final Color MUTED = new Color(0x6B7F80);
+    static final Color BORDER = new Color(0xD9E2DF);
+    static final Color INK = new Color(0x0F3B3D);           // deep lagoon (rail + your messages)
+    static final Color INK_HOVER = new Color(0x185153);
+    static final Color INK_TEXT = new Color(0xE3F0ED);
+    static final Color INK_MUTED = new Color(0x8FB1AD);
+    static final Color ACCENT = new Color(0xF2A93B);        // marigold (bot + actions)
+    static final Color ACCENT_HOVER = new Color(0xE29722);
+    static final Color DISABLED_FILL = new Color(0xDCE4E1);
+    static final Color DISABLED_ARROW = new Color(0xA9B9B5);
+    static final Color DOT_IDLE = new Color(0xCBD7D3);
+    static final Color ERROR_BG = new Color(0xFDECEA);
     static final Color ERROR_TEXT = new Color(0xA32D2D);
-    static final Color SELECTION = new Color(0xF1D5C9);
+    static final Color SELECTION = new Color(0xBFE3DD);
 
     // ---------- Fonts ----------
-    static final String FONT = pickFont("Segoe UI", "SF Pro Text", "Helvetica Neue", "Inter", "Roboto", Font.SANS_SERIF);
-    static final String SERIF = pickFont("Georgia", "Times New Roman", Font.SERIF);
+    static final String FONT = pickFont("Segoe UI", "SF Pro Text", "Helvetica Neue", "Noto Sans", "Roboto", Font.SANS_SERIF);
+    static final String HEAD = pickFont("Bahnschrift", "Avenir Next", "Trebuchet MS", FONT);
     static final Font BODY = new Font(FONT, Font.PLAIN, 15);
 
     // ---------- Sizes ----------
-    static final int MAX_COLUMN = 720;      // width of the centered conversation
-    static final int USER_MAX_TEXT = 400;   // max text width inside a user bubble
-    static final int BOT_MAX_TEXT = 460;    // max text width of a bot message
+    static final int RAIL_W = 220;          // width of the side rail
+    static final int MAX_COLUMN = 760;      // width of the centered conversation
+    static final int USER_MAX_TEXT = 420;   // max text width inside your bubble
+    static final int BOT_MAX_TEXT = 520;    // max text width inside a bot bubble
+
+    static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("HH:mm");
 
     public ChatUI(ApiClient api) {
         super("University IT Support");
         setDefaultCloseOperation(EXIT_ON_CLOSE);
-        setSize(680, 800);
-        setMinimumSize(new Dimension(580, 560));
+        setSize(960, 720);
+        setMinimumSize(new Dimension(760, 540));
         setLocationRelativeTo(null);
         setIconImage(Avatar.toImage(64));
         setContentPane(new ChatPanel(api));
@@ -139,7 +152,7 @@ public class ChatUI extends JFrame {
         private final JScrollPane scrollPane;
         private final PlaceholderField input = new PlaceholderField("Describe your problem...");
         private final SendButton sendButton = new SendButton();
-        private final RoundedPanel inputCard = new RoundedPanel(Color.WHITE, BORDER, 30);
+        private final RoundedPanel inputCard = new RoundedPanel(SURFACE, BORDER, 22);
         private boolean busy = false;
         private int generation = 0;   // changes on "New chat" so old answers are ignored
 
@@ -151,6 +164,7 @@ public class ChatUI extends JFrame {
             // Conversation (scrollable, centered column)
             messagesPanel.setLayout(new BoxLayout(messagesPanel, BoxLayout.Y_AXIS));
             messagesPanel.setOpaque(false);
+            messagesPanel.setBorder(new EmptyBorder(14, 0, 14, 0));
             ScrollablePanel wrapper = new ScrollablePanel(new ColumnLayout(MAX_COLUMN));
             wrapper.setBackground(BG);
             wrapper.add(messagesPanel);
@@ -167,87 +181,109 @@ public class ChatUI extends JFrame {
             center.add(buildWelcome(), "welcome");
             center.add(scrollPane, "chat");
 
-            add(buildTopBar(), BorderLayout.NORTH);
-            add(center, BorderLayout.CENTER);
-            add(buildBottom(), BorderLayout.SOUTH);
+            JPanel main = new JPanel(new BorderLayout());
+            main.setBackground(BG);
+            main.add(center, BorderLayout.CENTER);
+            main.add(buildBottom(), BorderLayout.SOUTH);
+
+            add(buildRail(), BorderLayout.WEST);
+            add(main, BorderLayout.CENTER);
 
             SwingUtilities.invokeLater(input::requestFocusInWindow);
         }
 
-        // ----- Top bar -----
-        private JPanel buildTopBar() {
-            JPanel bar = new JPanel(new BorderLayout());
-            bar.setBackground(BG);
-            bar.setBorder(new CompoundBorder(new MatteBorder(0, 0, 1, 0, BORDER), new EmptyBorder(10, 18, 10, 18)));
+        // ----- Side rail: brand, topic shortcuts, new chat -----
+        private JPanel buildRail() {
+            JPanel rail = new JPanel(new BorderLayout());
+            rail.setBackground(INK);
+            rail.setPreferredSize(new Dimension(RAIL_W, 0));
+            rail.setBorder(new EmptyBorder(22, 14, 18, 14));
 
             JLabel title = new JLabel("IT Support");
-            title.setFont(new Font(FONT, Font.BOLD, 16));
-            title.setForeground(TEXT);
-            JPanel left = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
-            left.setOpaque(false);
-            left.add(new Avatar(30));
-            left.add(title);
+            title.setFont(new Font(HEAD, Font.BOLD, 19));
+            title.setForeground(Color.WHITE);
+            JLabel sub = new JLabel("University help desk");
+            sub.setFont(new Font(FONT, Font.PLAIN, 12));
+            sub.setForeground(INK_MUTED);
+            JPanel names = new JPanel();
+            names.setLayout(new BoxLayout(names, BoxLayout.Y_AXIS));
+            names.setOpaque(false);
+            names.add(title);
+            names.add(sub);
 
-            PillButton newChat = new PillButton("New chat", BG);
+            JPanel avatarHolder = new JPanel(new BorderLayout());
+            avatarHolder.setOpaque(false);
+            avatarHolder.add(new Avatar(40), BorderLayout.NORTH);
+
+            JPanel brand = new JPanel(new BorderLayout(12, 0));
+            brand.setOpaque(false);
+            brand.setBorder(new EmptyBorder(0, 4, 26, 0));
+            brand.add(avatarHolder, BorderLayout.WEST);
+            brand.add(names, BorderLayout.CENTER);
+
+            JLabel label = new JLabel("Common topics");
+            label.setFont(new Font(FONT, Font.PLAIN, 12));
+            label.setForeground(INK_MUTED);
+            label.setBorder(new EmptyBorder(0, 8, 8, 0));
+            JPanel topics = new JPanel();
+            topics.setLayout(new BoxLayout(topics, BoxLayout.Y_AXIS));
+            topics.setOpaque(false);
+            topics.add(label);
+            for (String[] item : QUICK_BUTTONS) {
+                RailButton b = new RailButton(item[0], true);
+                b.addActionListener(e -> send(item[1]));
+                topics.add(b);
+                topics.add(Box.createVerticalStrut(2));
+            }
+
+            RailButton newChat = new RailButton("New chat", false);
             newChat.addActionListener(e -> newChat());
+            JLabel hint = new JLabel("<html><body style='width:150px'>For urgent issues, contact the IT office.</body></html>");
+            hint.setFont(new Font(FONT, Font.PLAIN, 12));
+            hint.setForeground(INK_MUTED);
+            hint.setBorder(new EmptyBorder(0, 6, 0, 0));
+            JPanel foot = new JPanel(new BorderLayout(0, 14));
+            foot.setOpaque(false);
+            foot.add(newChat, BorderLayout.NORTH);
+            foot.add(hint, BorderLayout.CENTER);
 
-            bar.add(left, BorderLayout.WEST);
-            bar.add(newChat, BorderLayout.EAST);
-            return bar;
+            rail.add(brand, BorderLayout.NORTH);
+            rail.add(topics, BorderLayout.CENTER);
+            rail.add(foot, BorderLayout.SOUTH);
+            return rail;
         }
 
-        // ----- Start screen: greeting + suggestion chips -----
+        // ----- Start screen -----
         private JPanel buildWelcome() {
+            JLabel greeting = new JLabel("Something not working?");
+            greeting.setFont(new Font(HEAD, Font.BOLD, 36));
+            greeting.setForeground(TEXT);
+
+            JLabel sub = new JLabel("<html><body style='width:380px'>Pick a topic from the list, "
+                    + "or describe the problem in English, French or Arabic.</body></html>");
+            sub.setFont(new Font(FONT, Font.PLAIN, 15));
+            sub.setForeground(MUTED);
+            sub.setBorder(new EmptyBorder(10, 2, 0, 0));
+
             JPanel column = new JPanel();
             column.setLayout(new BoxLayout(column, BoxLayout.Y_AXIS));
             column.setOpaque(false);
-
-            Avatar logo = new Avatar(54);
-            logo.setAlignmentX(Component.CENTER_ALIGNMENT);
-
-            JLabel greeting = new JLabel("How can I help you today?");
-            greeting.setFont(new Font(SERIF, Font.PLAIN, 30));
-            greeting.setForeground(TEXT);
-            greeting.setAlignmentX(Component.CENTER_ALIGNMENT);
-
-            JLabel sub = new JLabel("Pick a topic or describe your problem in English, French or Arabic.");
-            sub.setFont(new Font(FONT, Font.PLAIN, 14));
-            sub.setForeground(MUTED);
-            sub.setAlignmentX(Component.CENTER_ALIGNMENT);
-
-            column.add(logo);
-            column.add(Box.createVerticalStrut(16));
             column.add(greeting);
-            column.add(Box.createVerticalStrut(8));
             column.add(sub);
-            column.add(Box.createVerticalStrut(22));
 
-            // chips, 4 per row
-            for (int i = 0; i < QUICK_BUTTONS.length; i += 4) {
-                JPanel row = new JPanel(new FlowLayout(FlowLayout.CENTER, 8, 5));
-                row.setOpaque(false);
-                row.setAlignmentX(Component.CENTER_ALIGNMENT);
-                for (int j = i; j < Math.min(i + 4, QUICK_BUTTONS.length); j++) {
-                    String[] item = QUICK_BUTTONS[j];
-                    PillButton chip = new PillButton(item[0], CHIP_BG);
-                    chip.addActionListener(e -> send(item[1]));
-                    row.add(chip);
-                }
-                column.add(row);
-            }
-
-            JPanel welcome = new JPanel(new GridBagLayout());
-            welcome.setBackground(BG);
+            WelcomePanel welcome = new WelcomePanel();
             GridBagConstraints gc = new GridBagConstraints();
-            gc.insets = new Insets(0, 0, 70, 0);   // moves the content slightly above the middle
+            gc.anchor = GridBagConstraints.WEST;
+            gc.weightx = 1;
+            gc.insets = new Insets(0, 64, 56, 0);   // left margin, and slightly above the middle
             welcome.add(column, gc);
             return welcome;
         }
 
         // ----- Bottom: rounded input box -----
         private JPanel buildBottom() {
-            inputCard.setLayout(new BorderLayout(8, 0));
-            inputCard.setBorder(new EmptyBorder(7, 22, 7, 8));
+            inputCard.setLayout(new BorderLayout(10, 0));
+            inputCard.setBorder(new EmptyBorder(7, 20, 7, 7));
             inputCard.add(input, BorderLayout.CENTER);
 
             JPanel sendHolder = new JPanel(new GridBagLayout());
@@ -264,24 +300,14 @@ public class ChatUI extends JFrame {
                 public void changedUpdate(DocumentEvent e) { refreshSendButton(); }
             });
             input.addFocusListener(new FocusAdapter() {
-                @Override public void focusGained(FocusEvent e) { inputCard.setBorderColor(new Color(0xBDB8A8)); }
+                @Override public void focusGained(FocusEvent e) { inputCard.setBorderColor(ACCENT); }
                 @Override public void focusLost(FocusEvent e) { inputCard.setBorderColor(BORDER); }
             });
 
-            JLabel hint = new JLabel("For urgent issues, contact the IT office.", SwingConstants.CENTER);
-            hint.setFont(new Font(FONT, Font.PLAIN, 12));
-            hint.setForeground(MUTED);
-            hint.setBorder(new EmptyBorder(8, 0, 0, 0));
-
-            JPanel inner = new JPanel(new BorderLayout());
-            inner.setOpaque(false);
-            inner.add(inputCard, BorderLayout.CENTER);
-            inner.add(hint, BorderLayout.SOUTH);
-
             JPanel bottom = new JPanel(new ColumnLayout(MAX_COLUMN));
             bottom.setBackground(BG);
-            bottom.setBorder(new EmptyBorder(8, 20, 12, 20));
-            bottom.add(inner);
+            bottom.setBorder(new EmptyBorder(8, 24, 20, 24));
+            bottom.add(inputCard);
             return bottom;
         }
 
@@ -299,7 +325,7 @@ public class ChatUI extends JFrame {
             addUserRow(message);
             setBusy(true);
             final int gen = generation;
-            JPanel typingRow = addBotRow(new TypingDots());
+            JPanel typingRow = addBotRow(botBubble(new TypingSignal(), SURFACE, BORDER), false);
 
             // The network call runs in a background thread so the window never freezes
             CompletableFuture
@@ -355,45 +381,66 @@ public class ChatUI extends JFrame {
         }
 
         // ----- Showing messages -----
+        /** Your message: deep-lagoon bubble on the right, square corner at the bottom right. */
         private void addUserRow(String text) {
-            RoundedPanel bubble = new RoundedPanel(USER_BG, null, 22);
+            RoundedPanel bubble = new RoundedPanel(INK, null, 22, RoundedPanel.CUT_BOTTOM_RIGHT);
             bubble.setLayout(new BorderLayout());
-            bubble.setBorder(new EmptyBorder(10, 16, 10, 16));
-            bubble.add(makeText(text, TEXT, USER_MAX_TEXT), BorderLayout.CENTER);
+            bubble.setBorder(new EmptyBorder(11, 17, 11, 17));
+            bubble.add(makeText(text, Color.WHITE, USER_MAX_TEXT), BorderLayout.CENTER);
 
             JPanel row = new JPanel(new BorderLayout());
             row.setOpaque(false);
-            row.setBorder(new EmptyBorder(8, 24, 8, 24));
-            row.add(bubble, BorderLayout.EAST);
+            row.setBorder(new EmptyBorder(7, 28, 7, 28));
+            row.add(stamped(bubble, Component.RIGHT_ALIGNMENT), BorderLayout.EAST);
             appendRow(row);
         }
 
         private void addBotMessage(String text) {
-            addBotRow(makeText(text, TEXT, BOT_MAX_TEXT));
+            addBotRow(botBubble(makeText(text, TEXT, BOT_MAX_TEXT), SURFACE, BORDER), true);
         }
 
         private void addErrorRow(String text) {
-            RoundedPanel box = new RoundedPanel(ERROR_BG, null, 16);
-            box.setLayout(new BorderLayout());
-            box.setBorder(new EmptyBorder(10, 14, 10, 14));
-            box.add(makeText(text, ERROR_TEXT, BOT_MAX_TEXT - 30), BorderLayout.CENTER);
-            addBotRow(box);
+            addBotRow(botBubble(makeText(text, ERROR_TEXT, BOT_MAX_TEXT - 30), ERROR_BG, null), false);
         }
 
-        /** A bot row: small avatar on the left, content on the right (no bubble). */
-        private JPanel addBotRow(JComponent content) {
+        /** White bubble for the bot, square corner at the top left (next to the avatar). */
+        private RoundedPanel botBubble(JComponent inner, Color fill, Color border) {
+            RoundedPanel bubble = new RoundedPanel(fill, border, 22, RoundedPanel.CUT_TOP_LEFT);
+            bubble.setLayout(new BorderLayout());
+            bubble.setBorder(new EmptyBorder(11, 17, 11, 17));
+            bubble.add(inner, BorderLayout.CENTER);
+            return bubble;
+        }
+
+        /** Bubble with a small time label underneath. */
+        private static JPanel stamped(JComponent bubble, float align) {
+            JLabel time = new JLabel(LocalTime.now().format(TIME));
+            time.setFont(new Font(FONT, Font.PLAIN, 11));
+            time.setForeground(MUTED);
+            time.setBorder(new EmptyBorder(4, 4, 0, 4));
+            bubble.setAlignmentX(align);
+            time.setAlignmentX(align);
+            JPanel col = new JPanel();
+            col.setLayout(new BoxLayout(col, BoxLayout.Y_AXIS));
+            col.setOpaque(false);
+            col.add(bubble);
+            col.add(time);
+            return col;
+        }
+
+        /** A bot row: marigold avatar tile on the left, bubble on the right. */
+        private JPanel addBotRow(JComponent bubble, boolean withTime) {
             JPanel avatarHolder = new JPanel(new BorderLayout());
             avatarHolder.setOpaque(false);
-            avatarHolder.add(new Avatar(28), BorderLayout.NORTH);
+            avatarHolder.add(new Avatar(30), BorderLayout.NORTH);
 
             JPanel holder = new JPanel(new BorderLayout());
             holder.setOpaque(false);
-            holder.setBorder(new EmptyBorder(3, 0, 0, 0));
-            holder.add(content, BorderLayout.WEST);   // WEST keeps the content at its own width
+            holder.add(withTime ? stamped(bubble, Component.LEFT_ALIGNMENT) : bubble, BorderLayout.WEST);
 
             JPanel row = new JPanel(new BorderLayout(12, 0));
             row.setOpaque(false);
-            row.setBorder(new EmptyBorder(10, 24, 10, 24));
+            row.setBorder(new EmptyBorder(7, 28, 7, 28));
             row.add(avatarHolder, BorderLayout.WEST);
             row.add(holder, BorderLayout.CENTER);
             return appendRow(row);
@@ -417,16 +464,49 @@ public class ChatUI extends JFrame {
     //  Small custom components
     // =====================================================================
 
-    /** Panel with rounded corners, an optional 1px border and a fill color. */
+    /** Start-screen background: signal rings spreading from a marigold dot in the corner. */
+    static class WelcomePanel extends JPanel {
+        WelcomePanel() {
+            super(new GridBagLayout());
+            setBackground(BG);
+        }
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            super.paintComponent(g);
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            int cx = getWidth() - 90, cy = getHeight() - 100;
+            int[] alpha = {70, 52, 38, 26, 16};
+            g2.setStroke(new BasicStroke(1.5f));
+            for (int i = 0; i < alpha.length; i++) {
+                int r = 70 + i * 80;
+                g2.setColor(new Color(INK.getRed(), INK.getGreen(), INK.getBlue(), alpha[i]));
+                g2.drawOval(cx - r, cy - r, 2 * r, 2 * r);
+            }
+            g2.setColor(ACCENT);
+            g2.fillOval(cx - 8, cy - 8, 16, 16);
+            g2.dispose();
+        }
+    }
+
+    /** Panel with rounded corners, an optional 1px border, a fill color and an optional squared corner. */
     static class RoundedPanel extends JPanel {
+        static final int NONE = 0, CUT_TOP_LEFT = 1, CUT_BOTTOM_RIGHT = 2;
         private final Color fill;
         private Color borderColor;
         private final int arc;
+        private final int cut;
 
         RoundedPanel(Color fill, Color borderColor, int arc) {
+            this(fill, borderColor, arc, NONE);
+        }
+
+        RoundedPanel(Color fill, Color borderColor, int arc, int cut) {
             this.fill = fill;
             this.borderColor = borderColor;
             this.arc = arc;
+            this.cut = cut;
             setOpaque(false);
         }
 
@@ -435,36 +515,46 @@ public class ChatUI extends JFrame {
             repaint();
         }
 
+        private Shape shape(float x, float y, float w, float h) {
+            Area a = new Area(new RoundRectangle2D.Float(x, y, w, h, arc, arc));
+            float c = arc / 2f;
+            if (cut == CUT_TOP_LEFT) a.add(new Area(new Rectangle2D.Float(x, y, c, c)));
+            if (cut == CUT_BOTTOM_RIGHT) a.add(new Area(new Rectangle2D.Float(x + w - c, y + h - c, c, c)));
+            return a;
+        }
+
         @Override
         protected void paintComponent(Graphics g) {
             Graphics2D g2 = (Graphics2D) g.create();
             g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
             g2.setColor(fill);
-            g2.fill(new RoundRectangle2D.Float(0, 0, getWidth(), getHeight(), arc, arc));
+            g2.fill(shape(0, 0, getWidth(), getHeight()));
             if (borderColor != null) {
                 g2.setColor(borderColor);
-                g2.draw(new RoundRectangle2D.Float(0.5f, 0.5f, getWidth() - 1, getHeight() - 1, arc, arc));
+                g2.draw(shape(0.5f, 0.5f, getWidth() - 1, getHeight() - 1));
             }
             g2.dispose();
             super.paintComponent(g);
         }
     }
 
-    /** Rounded "pill" button used for chips and for "New chat". */
-    static class PillButton extends JButton {
-        private final Color restFill;
+    /** Button for the side rail: a topic row (topic = true) or the "New chat" action. */
+    static class RailButton extends JButton {
+        private final boolean topic;
         private boolean hover = false;
 
-        PillButton(String text, Color restFill) {
+        RailButton(String text, boolean topic) {
             super(text);
-            this.restFill = restFill;
-            setFont(new Font(FONT, Font.PLAIN, 14));
-            setForeground(TEXT);
+            this.topic = topic;
+            int h = topic ? 38 : 42;
+            setFont(new Font(FONT, topic ? Font.PLAIN : Font.BOLD, 14));
             setContentAreaFilled(false);
             setBorderPainted(false);
             setFocusPainted(false);
             setFocusable(false);
             setOpaque(false);
+            setPreferredSize(new Dimension(100, h));
+            setMaximumSize(new Dimension(Integer.MAX_VALUE, h));
             setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
             addMouseListener(new MouseAdapter() {
                 @Override public void mouseEntered(MouseEvent e) { hover = true; repaint(); }
@@ -473,29 +563,40 @@ public class ChatUI extends JFrame {
         }
 
         @Override
-        public Dimension getPreferredSize() {
-            return new Dimension(getFontMetrics(getFont()).stringWidth(getText()) + 34, 38);
-        }
-
-        @Override
         protected void paintComponent(Graphics g) {
             Graphics2D g2 = (Graphics2D) g.create();
             g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-            g2.setColor(hover ? CHIP_HOVER : restFill);
-            g2.fill(new RoundRectangle2D.Float(0, 0, getWidth(), getHeight(), getHeight(), getHeight()));
-            g2.setColor(BORDER);
-            g2.draw(new RoundRectangle2D.Float(0.5f, 0.5f, getWidth() - 1, getHeight() - 1, getHeight(), getHeight()));
+            g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+            int w = getWidth(), h = getHeight();
+            g2.setFont(getFont());
+            FontMetrics fm = g2.getFontMetrics();
+            int baseline = (h - fm.getHeight()) / 2 + fm.getAscent();
+
+            if (topic) {
+                if (hover) {
+                    g2.setColor(INK_HOVER);
+                    g2.fill(new RoundRectangle2D.Float(0, 0, w, h, 12, 12));
+                    g2.setColor(ACCENT);
+                    g2.fill(new RoundRectangle2D.Float(0, h * 0.28f, 3, h * 0.44f, 3, 3));
+                }
+                g2.setColor(hover ? Color.WHITE : INK_TEXT);
+                g2.drawString(getText(), 18, baseline);
+            } else {
+                g2.setColor(hover ? ACCENT_HOVER : ACCENT);
+                g2.fill(new RoundRectangle2D.Float(0, 0, w, h, 16, 16));
+                g2.setColor(INK);
+                g2.drawString(getText(), (w - fm.stringWidth(getText())) / 2, baseline);
+            }
             g2.dispose();
-            super.paintComponent(g);   // draws the text
         }
     }
 
-    /** Round send button with an up arrow. */
+    /** Rounded-square send button with a right arrow. */
     static class SendButton extends JButton {
         private boolean hover = false;
 
         SendButton() {
-            setPreferredSize(new Dimension(36, 36));
+            setPreferredSize(new Dimension(40, 40));
             setContentAreaFilled(false);
             setBorderPainted(false);
             setFocusPainted(false);
@@ -516,22 +617,22 @@ public class ChatUI extends JFrame {
             g2.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL, RenderingHints.VALUE_STROKE_PURE);
             int w = getWidth(), h = getHeight();
             g2.setColor(isEnabled() ? (hover ? ACCENT_HOVER : ACCENT) : DISABLED_FILL);
-            g2.fillOval(0, 0, w, h);
+            g2.fill(new RoundRectangle2D.Float(0, 0, w, h, 16, 16));
 
-            g2.setColor(Color.WHITE);
-            g2.setStroke(new BasicStroke(2.2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-            float cx = w / 2f;
-            g2.drawLine(Math.round(cx), Math.round(h * 0.70f), Math.round(cx), Math.round(h * 0.32f));
+            g2.setColor(isEnabled() ? INK : DISABLED_ARROW);
+            g2.setStroke(new BasicStroke(2.4f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+            float cx = w / 2f, cy = h / 2f;
+            g2.draw(new java.awt.geom.Line2D.Float(cx - 7, cy, cx + 6, cy));
             Path2D head = new Path2D.Float();
-            head.moveTo(cx - 5.5f, h * 0.32f + 5.5f);
-            head.lineTo(cx, h * 0.32f);
-            head.lineTo(cx + 5.5f, h * 0.32f + 5.5f);
+            head.moveTo(cx + 0.5f, cy - 6f);
+            head.lineTo(cx + 6.5f, cy);
+            head.lineTo(cx + 0.5f, cy + 6f);
             g2.draw(head);
             g2.dispose();
         }
     }
 
-    /** Round colored avatar with a small star (also used as the window icon). */
+    /** The bot's mark: a marigold tile with a dot and two signal arcs (also used as the window icon). */
     static class Avatar extends JComponent {
         private final int size;
 
@@ -552,21 +653,19 @@ public class ChatUI extends JFrame {
 
         static void draw(Graphics2D g2, int x, int y, int size) {
             g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g2.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL, RenderingHints.VALUE_STROKE_PURE);
             g2.setColor(ACCENT);
-            g2.fillOval(x, y, size, size);
+            g2.fill(new RoundRectangle2D.Float(x, y, size, size, size * 0.6f, size * 0.6f));
 
-            double cx = x + size / 2.0, cy = y + size / 2.0;
-            double outer = size * 0.31, inner = size * 0.12;
-            Path2D star = new Path2D.Double();
-            for (int i = 0; i < 16; i++) {
-                double angle = i * Math.PI / 8 - Math.PI / 2;
-                double r = (i % 2 == 0) ? outer : inner;
-                double px = cx + Math.cos(angle) * r, py = cy + Math.sin(angle) * r;
-                if (i == 0) star.moveTo(px, py); else star.lineTo(px, py);
+            g2.setColor(INK);
+            float cx = x + size / 2f, cy = y + size * 0.68f;
+            float dot = size * 0.09f;
+            g2.fill(new Ellipse2D.Float(cx - dot, cy - dot, dot * 2, dot * 2));
+            g2.setStroke(new BasicStroke(size * 0.075f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+            float[] radii = {size * 0.22f, size * 0.38f};
+            for (float r : radii) {
+                g2.draw(new Arc2D.Float(cx - r, cy - r, r * 2, r * 2, 45, 90, Arc2D.OPEN));
             }
-            star.closePath();
-            g2.setColor(Color.WHITE);
-            g2.fill(star);
         }
 
         static BufferedImage toImage(int size) {
@@ -578,16 +677,16 @@ public class ChatUI extends JFrame {
         }
     }
 
-    /** Three animated dots shown while waiting for the server. */
-    static class TypingDots extends JComponent {
+    /** Signal mark that lights up arc by arc while waiting for the server. */
+    static class TypingSignal extends JComponent {
         private int phase = 0;
-        private final Timer timer = new Timer(320, e -> {
+        private final Timer timer = new Timer(360, e -> {
             phase = (phase + 1) % 3;
             repaint();
         });
 
-        TypingDots() {
-            setPreferredSize(new Dimension(46, 22));
+        TypingSignal() {
+            setPreferredSize(new Dimension(34, 22));
         }
 
         @Override public void addNotify() { super.addNotify(); timer.start(); }
@@ -597,9 +696,16 @@ public class ChatUI extends JFrame {
         protected void paintComponent(Graphics g) {
             Graphics2D g2 = (Graphics2D) g.create();
             g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-            for (int i = 0; i < 3; i++) {
-                g2.setColor(i == phase ? ACCENT : DOT_IDLE);
-                g2.fillOval(4 + i * 14, 7, 8, 8);
+            g2.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL, RenderingHints.VALUE_STROKE_PURE);
+            float cx = getWidth() / 2f, cy = 19f;
+            g2.setColor(ACCENT);
+            g2.fill(new Ellipse2D.Float(cx - 3, cy - 3, 6, 6));
+            g2.setStroke(new BasicStroke(2.4f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+            float[] radii = {8f, 14f};
+            for (int i = 0; i < radii.length; i++) {
+                g2.setColor(phase >= i + 1 ? ACCENT : DOT_IDLE);
+                float r = radii[i];
+                g2.draw(new Arc2D.Float(cx - r, cy - r, r * 2, r * 2, 45, 90, Arc2D.OPEN));
             }
             g2.dispose();
         }
@@ -657,7 +763,7 @@ public class ChatUI extends JFrame {
             if (r.isEmpty() || !scrollbar.isEnabled()) return;
             Graphics2D g2 = (Graphics2D) g.create();
             g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-            g2.setColor(new Color(0xCFCBBE));
+            g2.setColor(new Color(0xC5D1CD));
             g2.fillRoundRect(r.x + 3, r.y + 2, r.width - 6, r.height - 4, 8, 8);
             g2.dispose();
         }
