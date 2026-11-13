@@ -108,31 +108,28 @@ def get_response(message, session_id):
             {"awaiting_resolution": False}
         )
 
+        # Exit
         if user in ["exit", "quit", "bye"]:
             state["awaiting_resolution"] = False
             return "Goodbye!"
 
-        # Handle yes/no answers to the previous troubleshooting advice.
+        # Handle yes/no answers
         if state["awaiting_resolution"]:
+
             if user in YES:
                 state["awaiting_resolution"] = False
                 return "Great! Glad I could help."
 
             if user in NO:
                 state["awaiting_resolution"] = False
-                return "Please contact our IT office:\n" + CONTACT
-
-            # If neither yes nor no, process it as a new question.
-            state["awaiting_resolution"] = False
-
-        # Find an IT problem.
-        result=list(prolog.query(f"problem({user},X)"))
-        return (
-                    list["X"]
-                    + "\n\nIs your problem solved? Reply yes or no."
+                return (
+                    "Please contact our IT office:\n" + CONTACT
                 )
 
-        # Find small talk: greeting, thanks, or help.
+            # Treat other messages as new questions
+            state["awaiting_resolution"] = False
+
+        # 1. Find small talk
         for category, data in SMALL_TALK.items():
             if any(
                 matches_keyword(user, word)
@@ -140,12 +137,35 @@ def get_response(message, session_id):
             ):
                 return data["answer"]
 
-        # Save unrecognized messages for later review.
+        # 2. Search for an IT problem in Prolog
+        escaped_user = (
+            user.replace("\\", "\\\\")
+                .replace("'", "\\'")
+        )
+
+        result = list(
+            prolog.query(
+                f"problem('{escaped_user}', X)"
+            )
+        )
+        if result:
+            answer = str(result[0]["X"])
+
+            state["awaiting_resolution"] = True
+
+            return (
+                answer
+                + "\n\nIs your problem solved? Reply yes or no."
+            )
+
+        # 3. Save unrecognized messages
         with open(UNMATCHED_FILE, "a", encoding="utf-8") as file:
             file.write(user + "\n")
 
-        return "Sorry, I couldn't identify your problem. Please describe it differently."
-
+        return (
+            "Sorry, I couldn't identify your problem. "
+            "Please describe it differently."
+        )
 
 @app.post("/chat")
 def chat(request: ChatRequest):
