@@ -1,0 +1,6 @@
+<?xml version="1.0" ?>
+<jpackage-state version="27.0.1.0.3" platform="windows">
+  <app-version>1.0</app-version>
+  <main-launcher name="UniversityITSupport">
+    <description>UniversityITSupport</description>
+  </main-launcher></jpackage-state>

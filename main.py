@@ -143,7 +143,6 @@ def get_response(message, session_id):
             keyword = str(fact["Keyword"])
 
             if matches_keyword(user, keyword):
-
                 answer = str(fact["Answer"])
 
                 state["awaiting_resolution"] = True

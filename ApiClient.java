@@ -24,8 +24,9 @@ public class ApiClient {
     private final String url;
     private volatile String sessionId = UUID.randomUUID().toString();   // one id per conversation
     private final HttpClient http = HttpClient.newBuilder()
-            .connectTimeout(Duration.ofSeconds(5))
-            .build();
+        .connectTimeout(Duration.ofSeconds(15))
+        .followRedirects(HttpClient.Redirect.NORMAL)
+        .build();
 
     public ApiClient(String url) {
         this.url = url;
@@ -46,7 +47,7 @@ public class ApiClient {
                 + quote(SESSION_FIELD) + ":" + quote(sessionId) + "}";
 
         HttpRequest request = HttpRequest.newBuilder(URI.create(url))
-                .timeout(Duration.ofSeconds(10))
+                .timeout(Duration.ofSeconds(90))
                 .header("Content-Type", "application/json; charset=utf-8")
                 .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))
                 .build();
