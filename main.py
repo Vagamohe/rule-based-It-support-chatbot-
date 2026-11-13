@@ -138,16 +138,18 @@ def get_response(message, session_id):
                 return data["answer"]
 
         # 2. Search for an IT problem in Prolog
-        escaped_user = (
-            user.replace("\\", "\\\\")
-                .replace("'", "\\'")
-        )
-
-        result = list(
-            prolog.query(
-                f"problem('{escaped_user}', X)"
-            )
-        )
+        problems=list(prolog.query("problem(X,_)"))
+        for word in list.items():
+            if matches_keyword(user, word):
+                escaped_user = (
+                            word.replace("\\", "\\\\")
+                                .replace("'", "\\'")
+                        )
+                result = list(
+                            prolog.query(
+                                f"problem('{escaped_user}', X)"
+                            )
+                        )
         if result:
             answer = str(result[0]["X"])
 
