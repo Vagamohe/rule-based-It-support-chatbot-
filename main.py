@@ -146,7 +146,11 @@ def get_response(message, session_id):
                 answer = str(fact["Answer"])
 
                 state["awaiting_resolution"] = True
-                answer = answer.decode("utf-8").strip()
+                # Safe approach (handles both string or bytes just in case)
+                if isinstance(answer, bytes):
+                 answer = answer.decode("utf-8").strip()
+                elif isinstance(answer, str):
+                 answer = answer.strip()
                 return (
                     answer
                     + "\n\nIs your problem solved? Reply yes or no."
