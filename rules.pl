@@ -913,4 +913,4 @@ Please describe:
 For direct assistance, contact the university IT office.').
 problem(aide, 'IT support:
 Please describe your technical problem, the application involved, and any error message you received. You can also contact the university IT office.').
-problem("fuck", "don't use any bad word and if you not satisfied by my answer i'll do my best to help you").
+problem(fuck, "don't use any bad word and if you not satisfied by my answer i'll do my best to help you").
