@@ -148,7 +148,7 @@ def get_response(message, session_id):
                 state["awaiting_resolution"] = True
 
                 return (
-                    answer
+                    answer.decode("utf-8").strip()
                     + "\n\nIs your problem solved? Reply yes or no."
                 )
 
